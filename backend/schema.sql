@@ -1,0 +1,82 @@
+-- DayFX Signals — MySQL schema (import via cPanel > phpMyAdmin)
+SET NAMES utf8mb4;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(80) NOT NULL,
+  email VARCHAR(160) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  email_alerts TINYINT(1) NOT NULL DEFAULT 1,
+  push_alerts TINYINT(1) NOT NULL DEFAULT 1,
+  elite_only TINYINT(1) NOT NULL DEFAULT 0,
+  reset_code VARCHAR(10) NULL,
+  reset_expires DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used DATETIME NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS device_tokens (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NULL,
+  fcm_token VARCHAR(255) NOT NULL UNIQUE,
+  platform VARCHAR(20) NOT NULL DEFAULT 'android',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS signals (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  pair VARCHAR(10) NOT NULL,
+  direction ENUM('BUY','SELL') NOT NULL,
+  strategy VARCHAR(40) NOT NULL,          -- trend_pullback | break_retest | london_breakout | news_momentum
+  tier ENUM('ELITE','HIGH','STANDARD') NOT NULL,
+  score TINYINT UNSIGNED NOT NULL,         -- 0-100 confluence score
+  entry DECIMAL(12,5) NOT NULL,
+  sl DECIMAL(12,5) NOT NULL,
+  tp1 DECIMAL(12,5) NOT NULL,
+  tp2 DECIMAL(12,5) NOT NULL,
+  reasons TEXT NOT NULL,                   -- JSON array of human-readable confluences
+  status ENUM('ACTIVE','TP1','WIN','LOSS','BREAKEVEN','CLOSED_EOD') NOT NULL DEFAULT 'ACTIVE',
+  result_pips DECIMAL(8,1) NULL,
+  max_favorable_pips DECIMAL(8,1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,            -- UTC
+  closes_at DATETIME NOT NULL,             -- UTC end-of-day cutoff
+  closed_at DATETIME NULL,
+  INDEX idx_status (status),
+  INDEX idx_created (created_at),
+  INDEX idx_pair (pair, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS news_events (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  event_key CHAR(40) NOT NULL UNIQUE,
+  title VARCHAR(200) NOT NULL,
+  currency VARCHAR(5) NOT NULL,
+  impact VARCHAR(10) NOT NULL,             -- High | Medium | Low | Holiday
+  event_time DATETIME NOT NULL,            -- UTC
+  forecast VARCHAR(40) NULL,
+  previous VARCHAR(40) NULL,
+  momentum_checked TINYINT(1) NOT NULL DEFAULT 0,
+  INDEX idx_time (event_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS engine_log (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  level VARCHAR(10) NOT NULL,
+  message TEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS kv_store (
+  k VARCHAR(80) PRIMARY KEY,
+  v TEXT NOT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -1,0 +1,3 @@
+# Block direct web access to everything except /api
+RewriteEngine On
+RewriteRule ^(lib|config\.php|config\.sample\.php|schema\.sql|cron\.php|backtest\.php) - [F,L]
