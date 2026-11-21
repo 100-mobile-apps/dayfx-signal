@@ -100,7 +100,9 @@ Future<int> pollAndNotify({bool force = false}) async {
           await _plugin.show(
             s.id,
             '${s.direction} ${s.pair} · ${tierText(s.tier)} (${s.score}/100)',
-            'Entry ${s.fmt(s.entry)}  SL ${s.fmt(s.sl)}  TP1 ${s.fmt(s.tp1)}  TP2 ${s.fmt(s.tp2)}',
+            s.locked
+                ? '${s.strategyName} · Premium signal'
+                : 'Entry ${s.fmt(s.entry)}  SL ${s.fmt(s.sl)}  TP1 ${s.fmt(s.tp1)}  TP2 ${s.fmt(s.tp2)}',
             _details('signals'),
             payload: '${s.id}',
           );

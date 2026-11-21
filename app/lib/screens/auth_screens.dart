@@ -153,13 +153,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _pass = TextEditingController();
+  final _ref = TextEditingController();
   bool _busy = false;
 
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
     try {
-      await context.read<AppState>().register(_name.text.trim(), _email.text.trim(), _pass.text);
+      await context.read<AppState>().register(_name.text.trim(), _email.text.trim(), _pass.text, ref: _ref.text.trim());
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
       if (mounted) toast(context, e.toString());
@@ -195,6 +196,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 14),
             _PasswordField(_pass),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _ref,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                  labelText: 'Referral code (optional)',
+                  prefixIcon: Icon(Icons.card_giftcard_rounded, color: AppColors.muted)),
+            ),
           ]),
         ),
         const SizedBox(height: 24),

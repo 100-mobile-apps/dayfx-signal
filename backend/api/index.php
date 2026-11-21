@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/lib/bootstrap.php';
-require dirname(__DIR__) . '/lib/Notifier.php';
+require_once dirname(__DIR__) . '/lib/Notifier.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -29,7 +29,11 @@ function auth_user(): array
     $st->execute([hash('sha256', $m[1])]);
     $u = $st->fetch();
     if (!$u) fail('Unauthorized', 401);
-    db()->prepare('UPDATE auth_tokens SET last_used = NOW() WHERE token_hash = ?')->execute([hash('sha256', $m[1])]);
+    if ($u['status'] === 'banned') fail('This account has been suspended. Contact support.', 403);
+    if (!$u['last_seen'] || strtotime($u['last_seen'] . ' UTC') < time() - 300) {
+        db()->prepare('UPDATE auth_tokens SET last_used = UTC_TIMESTAMP() WHERE token_hash = ?')->execute([hash('sha256', $m[1])]);
+        db()->prepare('UPDATE users SET last_seen = UTC_TIMESTAMP() WHERE id = ?')->execute([$u['id']]);
+    }
     return $u;
 }
 function issue_token(int $uid): string
@@ -44,15 +48,23 @@ function public_user(array $u): array
         'id' => (int)$u['id'], 'name' => $u['name'], 'email' => $u['email'],
         'email_alerts' => (bool)$u['email_alerts'], 'push_alerts' => (bool)$u['push_alerts'],
         'elite_only' => (bool)$u['elite_only'],
+        'is_premium' => is_premium($u),
+        'premium_until' => $u['premium_until'] ? gmdate('c', strtotime($u['premium_until'] . ' UTC')) : null,
+        'is_admin' => is_admin($u),
+        'ref_code' => $u['ref_code'] ?? null,
+        'created_at' => gmdate('c', strtotime($u['created_at'] . ' UTC')),
     ];
 }
-function signal_out(array $s): array
+function signal_out(array $s, ?array $viewer = null): array
 {
+    $locked = signal_locked_for($s, $viewer);
     return [
         'id' => (int)$s['id'], 'pair' => $s['pair'], 'direction' => $s['direction'],
         'strategy' => $s['strategy'], 'strategy_name' => Notifier::strategyName($s['strategy']),
         'tier' => $s['tier'], 'score' => (int)$s['score'],
-        'entry' => (float)$s['entry'], 'sl' => (float)$s['sl'], 'tp1' => (float)$s['tp1'], 'tp2' => (float)$s['tp2'],
+        'locked' => $locked,
+        'entry' => $locked ? null : (float)$s['entry'], 'sl' => $locked ? null : (float)$s['sl'],
+        'tp1' => $locked ? null : (float)$s['tp1'], 'tp2' => $locked ? null : (float)$s['tp2'],
         'reasons' => json_decode($s['reasons'], true) ?: [],
         'status' => $s['status'],
         'result_pips' => $s['result_pips'] === null ? null : (float)$s['result_pips'],
@@ -86,8 +98,11 @@ try {
         if (strlen($pass) < 8) fail('Password must be at least 8 characters');
         $st = db()->prepare('SELECT id FROM users WHERE email = ?'); $st->execute([$email]);
         if ($st->fetch()) fail('An account with this email already exists', 409);
-        db()->prepare('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)')
-            ->execute([$name, $email, password_hash($pass, PASSWORD_DEFAULT)]);
+        $referrer = referrer_by_code($b['ref'] ?? null);
+        $source = ($b['source'] ?? '') === 'web' ? 'web' : 'app';
+        db()->prepare('INSERT INTO users (name, email, password_hash, ref_code, referred_by, signup_source) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$name, $email, password_hash($pass, PASSWORD_DEFAULT), new_ref_code($name),
+                $referrer && strtolower($referrer['email']) !== $email ? $referrer['id'] : null, $source]);
         $id = (int)db()->lastInsertId();
         $u = db()->query("SELECT * FROM users WHERE id = $id")->fetch();
         out(['token' => issue_token($id), 'user' => public_user($u)], 201);
@@ -99,6 +114,8 @@ try {
         $st->execute([strtolower(trim($b['email'] ?? ''))]);
         $u = $st->fetch();
         if (!$u || !password_verify((string)($b['password'] ?? ''), $u['password_hash'])) fail('Incorrect email or password', 401);
+        if ($u['status'] === 'banned') fail('This account has been suspended. Contact support.', 403);
+        ensure_ref_code($u);
         out(['token' => issue_token((int)$u['id']), 'user' => public_user($u)]);
     }
     if ($route === '/auth/forgot' && $method === 'POST') {
@@ -128,6 +145,40 @@ try {
         out(['token' => issue_token((int)$u['id']), 'user' => public_user($u)]);
     }
 
+    // ---------------------------------------------------------- public
+    if ($route === '/config' && $method === 'GET') {
+        out([
+            'site_name' => setting('site_name'),
+            'announcement' => setting('announcement'),
+            'premium_enabled' => premium_on() && paystack_ready(),
+            'lock_scope' => setting('lock_scope'),
+            'free_delay_minutes' => (int)setting('free_delay_minutes'),
+            'plans' => plans(),
+            'affiliate_enabled' => (bool)setting('affiliate_enabled'),
+            'commission_pct' => (float)setting('commission_pct'),
+        ]);
+    }
+    if ($route === '/ref/click' && $method === 'POST') {
+        rate_limit('click', 30, 3600);
+        record_ref_click((string)(body()['code'] ?? ''));
+        out(['ok' => true]);
+    }
+    if ($route === '/ref/check' && $method === 'GET') {
+        $r = referrer_by_code($_GET['code'] ?? '');
+        out(['valid' => (bool)$r, 'name' => $r ? explode(' ', $r['name'])[0] : null]);
+    }
+    if ($route === '/paystack/webhook' && $method === 'POST') {
+        $raw = file_get_contents('php://input') ?: '';
+        $sig = $_SERVER['HTTP_X_PAYSTACK_SIGNATURE'] ?? '';
+        if (!paystack_ready() || !hash_equals(hash_hmac('sha512', $raw, (string)cfg('paystack_secret_key')), $sig)) fail('Bad signature', 401);
+        $ev = json_decode($raw, true) ?: [];
+        if (($ev['event'] ?? '') === 'charge.success' && !empty($ev['data']['reference'])) {
+            // re-check with Paystack instead of trusting the payload alone
+            paystack_verify((string)$ev['data']['reference']);
+        }
+        out(['ok' => true]);
+    }
+
     // ---------------------------------------------------------- authenticated
     $user = auth_user();
 
@@ -137,12 +188,137 @@ try {
         db()->prepare('DELETE FROM auth_tokens WHERE token_hash = ?')->execute([hash('sha256', $m[1])]);
         out(['ok' => true]);
     }
-    if ($route === '/me' && $method === 'GET') out(['user' => public_user($user)]);
+    if ($route === '/me' && $method === 'GET') { ensure_ref_code($user); out(['user' => public_user($user)]); }
+    if ($route === '/me/password' && $method === 'POST') {
+        rate_limit('pw', 10, 3600);
+        $b = body();
+        if (!password_verify((string)($b['current'] ?? ''), $user['password_hash'])) fail('Current password is wrong');
+        if (strlen((string)($b['password'] ?? '')) < 8) fail('New password must be at least 8 characters');
+        db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($b['password'], PASSWORD_DEFAULT), $user['id']]);
+        out(['ok' => true]);
+    }
+    if ($route === '/me/name' && $method === 'POST') {
+        $n = trim((string)(body()['name'] ?? ''));
+        if (mb_strlen($n) < 2 || mb_strlen($n) > 80) fail('Please enter your name');
+        db()->prepare('UPDATE users SET name = ? WHERE id = ?')->execute([$n, $user['id']]);
+        out(['user' => public_user(user_by_id((int)$user['id']))]);
+    }
+
+    // ---------------------------------------------------------- Premium (web checkout via Paystack)
+    if ($route === '/billing' && $method === 'GET') {
+        $st = db()->prepare("SELECT reference, plan, amount, currency, status, created_at, paid_at FROM payments
+                             WHERE user_id = ? AND status <> 'pending' ORDER BY id DESC LIMIT 30");
+        $st->execute([$user['id']]);
+        out([
+            'enabled' => premium_on() && paystack_ready(),
+            'is_premium' => is_premium($user),
+            'premium_until' => $user['premium_until'] ? gmdate('c', strtotime($user['premium_until'] . ' UTC')) : null,
+            'plans' => plans(),
+            'lock_scope' => setting('lock_scope'),
+            'payments' => array_map(fn($p) => [
+                'reference' => $p['reference'], 'plan' => $p['plan'], 'status' => $p['status'],
+                'amount' => (int)$p['amount'], 'currency' => $p['currency'], 'label' => money((int)$p['amount'], $p['currency']),
+                'date' => gmdate('c', strtotime(($p['paid_at'] ?: $p['created_at']) . ' UTC')),
+            ], $st->fetchAll()),
+        ]);
+    }
+    if ($route === '/billing/checkout' && $method === 'POST') {
+        rate_limit('checkout', 20, 3600);
+        if (!premium_on() || !paystack_ready()) fail('Premium is not available yet');
+        $plan = plan_by_id((string)(body()['plan'] ?? ''));
+        if (!$plan || $plan['amount'] < 100) fail('Choose a plan');
+        try { out(paystack_checkout($user, $plan)); } catch (RuntimeException $e) { fail($e->getMessage(), 502); }
+    }
+    if ($route === '/billing/verify' && $method === 'POST') {
+        $ref = (string)(body()['reference'] ?? '');
+        $st = db()->prepare('SELECT * FROM payments WHERE reference = ? AND user_id = ?');
+        $st->execute([$ref, $user['id']]);
+        if (!$st->fetch()) fail('Payment not found', 404);
+        $p = paystack_verify($ref);
+        $u = user_by_id((int)$user['id']);
+        out(['status' => $p['status'] ?? 'pending', 'user' => public_user($u)]);
+    }
+
+    // ---------------------------------------------------------- affiliate programme
+    if ($route === '/affiliate' && $method === 'GET') {
+        $code = ensure_ref_code($user);
+        $st = db()->prepare("SELECT c.amount, c.currency, c.rate, c.status, c.available_at, c.created_at, u.name
+                             FROM commissions c LEFT JOIN users u ON u.id = c.referred_user_id
+                             WHERE c.affiliate_id = ? ORDER BY c.id DESC LIMIT 50");
+        $st->execute([$user['id']]);
+        $commissions = array_map(fn($c) => [
+            'amount' => (int)$c['amount'], 'label' => money((int)$c['amount'], $c['currency']), 'rate' => (float)$c['rate'],
+            'status' => $c['status'] === 'void' ? 'void' : (strtotime($c['available_at'] . ' UTC') > time() ? 'pending' : 'available'),
+            'from' => $c['name'] ? mb_substr(explode(' ', $c['name'])[0], 0, 1) . '***' : 'Deleted user',
+            'date' => gmdate('c', strtotime($c['created_at'] . ' UTC')),
+            'available_at' => gmdate('c', strtotime($c['available_at'] . ' UTC')),
+        ], $st->fetchAll());
+        $st = db()->prepare('SELECT amount, currency, status, admin_note, created_at, processed_at FROM payouts WHERE affiliate_id = ? ORDER BY id DESC LIMIT 30');
+        $st->execute([$user['id']]);
+        $payouts = array_map(fn($p) => [
+            'amount' => (int)$p['amount'], 'label' => money((int)$p['amount'], $p['currency']), 'status' => $p['status'],
+            'note' => $p['admin_note'], 'date' => gmdate('c', strtotime($p['created_at'] . ' UTC')),
+        ], $st->fetchAll());
+        $bal = affiliate_balance((int)$user['id']);
+        out([
+            'enabled' => (bool)setting('affiliate_enabled'),
+            'premium_enabled' => premium_on() && paystack_ready(),
+            'code' => $code,
+            'link' => ref_link($code),
+            'commission_pct' => (float)setting('commission_pct'),
+            'recurring' => (bool)setting('commission_recurring'),
+            'hold_days' => (int)setting('hold_days'),
+            'min_payout' => (int)setting('min_payout'),
+            'min_payout_label' => money((int)setting('min_payout')),
+            'currency' => setting('currency'),
+            'stats' => affiliate_counts((int)$user['id']),
+            'balance' => $bal,
+            'balance_labels' => array_map(fn($v) => money($v), $bal),
+            'commissions' => $commissions,
+            'payouts' => $payouts,
+            'payout_details' => json_decode((string)$user['payout_details'], true) ?: null,
+        ]);
+    }
+    if ($route === '/affiliate/details' && $method === 'POST') {
+        $b = body();
+        $d = [
+            'bank_name' => trim(mb_substr((string)($b['bank_name'] ?? ''), 0, 80)),
+            'account_number' => preg_replace('/\D/', '', (string)($b['account_number'] ?? '')),
+            'account_name' => trim(mb_substr((string)($b['account_name'] ?? ''), 0, 100)),
+        ];
+        if ($d['bank_name'] === '' || strlen($d['account_number']) < 6 || strlen($d['account_number']) > 20 || $d['account_name'] === '') {
+            fail('Enter your bank name, account number and account name');
+        }
+        db()->prepare('UPDATE users SET payout_details = ? WHERE id = ?')->execute([json_encode($d), $user['id']]);
+        out(['ok' => true, 'payout_details' => $d]);
+    }
+    if ($route === '/affiliate/payout' && $method === 'POST') {
+        rate_limit('payout', 10, 3600);
+        if (!setting('affiliate_enabled')) fail('The affiliate programme is paused');
+        $details = json_decode((string)$user['payout_details'], true);
+        if (!$details) fail('Add your bank details first');
+        $st = db()->prepare("SELECT COUNT(*) FROM payouts WHERE affiliate_id = ? AND status = 'requested'");
+        $st->execute([$user['id']]);
+        if ((int)$st->fetchColumn() > 0) fail('You already have a payout request being processed');
+        $bal = affiliate_balance((int)$user['id']);
+        $amount = isset(body()['amount']) ? (int)round((float)body()['amount'] * 100) : $bal['available'];
+        if ($amount < (int)setting('min_payout')) fail('Minimum payout is ' . money((int)setting('min_payout')));
+        if ($amount > $bal['available']) fail('Amount is more than your available balance');
+        db()->prepare('INSERT INTO payouts (affiliate_id, amount, currency, details) VALUES (?, ?, ?, ?)')
+            ->execute([$user['id'], $amount, setting('currency'), json_encode($details)]);
+        $to = (array)(cfg('admin_emails') ?? []);
+        if ($to) Notifier::sendMail(implode(',', $to), 'New affiliate payout request', Notifier::emailHtml('Payout request', [
+            'Affiliate' => $user['name'] . ' <' . $user['email'] . '>', 'Amount' => money($amount),
+            'Bank' => $details['bank_name'] . ' · ' . $details['account_number'] . ' · ' . $details['account_name'],
+        ]));
+        out(['ok' => true]);
+    }
     if ($route === '/me' && $method === 'DELETE') { // Google Play account-deletion requirement
         $pdo = db();
         $pdo->beginTransaction();
         try {
             $pdo->prepare('DELETE FROM device_tokens WHERE user_id = ?')->execute([$user['id']]);
+            $pdo->prepare('UPDATE users SET referred_by = NULL WHERE referred_by = ?')->execute([$user['id']]);
             $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$user['id']]);
             $pdo->commit();
         } catch (Throwable $e) {
@@ -181,13 +357,13 @@ try {
         if (!empty($_GET['before_id'])) { $where .= ' AND id < ?'; $params[] = (int)$_GET['before_id']; }
         $st = db()->prepare("SELECT * FROM signals WHERE $where ORDER BY id DESC LIMIT $limit");
         $st->execute($params);
-        out(['signals' => array_map('signal_out', $st->fetchAll())]);
+        out(['signals' => array_map(fn($s) => signal_out($s, $user), $st->fetchAll())]);
     }
     if (preg_match('#^/signals/(\d+)$#', $route, $m) && $method === 'GET') {
         $st = db()->prepare('SELECT * FROM signals WHERE id = ?'); $st->execute([(int)$m[1]]);
         $s = $st->fetch();
         if (!$s) fail('Not found', 404);
-        out(['signal' => signal_out($s)]);
+        out(['signal' => signal_out($s, $user)]);
     }
 
     // ---------------------------------------------------------- results / track record

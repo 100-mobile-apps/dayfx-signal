@@ -46,6 +46,22 @@ class SignalCard extends StatelessWidget {
               ScoreRing(score: s.score, color: tierColor(s.tier), size: 42),
             ]),
             const SizedBox(height: 14),
+            if (s.locked)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+                ),
+                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.lock_rounded, size: 16, color: AppColors.gold),
+                  SizedBox(width: 6),
+                  Text('Premium signal · levels hidden', style: TextStyle(color: AppColors.gold, fontWeight: FontWeight.w700)),
+                ]),
+              )
+            else
             Row(children: [
               _Lvl('Entry', s.fmt(s.entry), AppColors.text),
               _Lvl('SL', s.fmt(s.sl), AppColors.red),

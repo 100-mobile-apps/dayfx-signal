@@ -129,6 +129,22 @@ class SettingsScreen extends StatelessWidget {
                   style: TextStyle(color: AppColors.muted, fontSize: 12)),
             ),
           ),
+          if (s.user?.refCode != null) ...[
+            const SectionTitle('Invite traders'),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.card_giftcard_rounded, color: AppColors.green),
+                title: Text('Your referral code: ${s.user!.refCode}'),
+                subtitle: const Text('Share your link. Friends who join with it are linked to you, and you can see your referrals and earnings on the DayFX website.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                trailing: const Icon(Icons.share_rounded, color: AppColors.faint),
+                onTap: () => Share.share(
+                  'I use DayFX for forex day trading signals with a live track record. '
+                  'Join with my link: ${AppConfig.referralLink(s.user!.refCode!)}',
+                ),
+              ),
+            ),
+          ],
           const SectionTitle('About'),
           Card(
             child: Column(children: [

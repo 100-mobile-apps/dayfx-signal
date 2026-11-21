@@ -40,7 +40,15 @@ return [
     // Protects cron.php when called over HTTP (cron via CLI does not need it)
     'cron_secret' => 'CHANGE_ME_LONG_RANDOM',
 
-    // Simple admin dashboard login
-    'admin_user' => 'admin',
-    'admin_pass_hash' => '', // generate: php -r "echo password_hash('yourpass', PASSWORD_DEFAULT);"
+    // Public address of this folder, no trailing slash. Used for referral links, emails and the Paystack return.
+    'base_url' => 'https://yourdomain.com/dayfx',
+
+    // Admin panel (/admin): sign in with a normal DayFX account whose email is listed here.
+    // Payout-request emails also go to these addresses.
+    'admin_emails' => ['you@yourdomain.com'],
+
+    // Paystack (dashboard.paystack.com > Settings > API Keys & Webhooks).
+    // Webhook URL: https://yourdomain.com/dayfx/api/paystack/webhook
+    // Premium stays hidden until this key is set AND Premium is switched on in /admin > Settings.
+    'paystack_secret_key' => '',   // sk_live_... (or sk_test_... while testing)
 ];
