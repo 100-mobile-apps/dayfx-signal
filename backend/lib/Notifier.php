@@ -12,17 +12,32 @@ final class Notifier
         $title = "{$s['direction']} {$s['pair']} · {$s['tier']} ({$s['score']}/100)";
         $body = "Entry {$s['entry']}  SL {$s['sl']}  TP1 {$s['tp1']}  TP2 {$s['tp2']}";
         $data = ['type' => 'signal', 'signal_id' => (string)$s['id']];
+        if (function_exists('signal_locked_for_free') && signal_locked_for_free(['created_at' => gmdate('Y-m-d H:i:s'), 'status' => 'ACTIVE'] + $s)) {
+            $body = self::strategyName($s['strategy']) . ' · Premium signal, open DayFX for the levels';
+        }
         self::push('signals_all', $title, $body, $data);
         if ($s['tier'] === 'ELITE') self::push('signals_elite', $title, $body, $data);
 
-        $html = self::emailHtml($title, [
+        $rows = [
             'Strategy' => self::strategyName($s['strategy']),
             'Entry' => $s['entry'], 'Stop loss' => $s['sl'],
             'Take profit 1' => $s['tp1'], 'Take profit 2' => $s['tp2'],
             'Why' => implode(' · ', $s['reasons']),
-        ]);
+        ];
         $eliteOnly = $s['tier'] === 'ELITE' ? '' : ' AND elite_only = 0';
-        self::emailUsers("New signal: $title", $html, "email_alerts = 1$eliteOnly");
+        $base = "email_alerts = 1 AND status = 'active'$eliteOnly";
+        $row = ['created_at' => gmdate('Y-m-d H:i:s'), 'status' => 'ACTIVE'] + $s;
+        if (function_exists('signal_locked_for_free') && signal_locked_for_free($row)) {
+            // Premium members get the levels, everyone else gets a teaser
+            self::emailUsers("New signal: $title", self::emailHtml($title, $rows),
+                "$base AND (premium_until > UTC_TIMESTAMP() OR role = 'admin')");
+            $teaser = ['Strategy' => $rows['Strategy'], 'Why' => $rows['Why'],
+                'Levels' => 'Premium members only. Open DayFX on the web to upgrade.'];
+            self::emailUsers("New signal: $title", self::emailHtml($title, $teaser),
+                "$base AND (premium_until IS NULL OR premium_until <= UTC_TIMESTAMP()) AND role <> 'admin'");
+        } else {
+            self::emailUsers("New signal: $title", self::emailHtml($title, $rows), $base);
+        }
     }
 
     public static function statusChange(array $s): void
@@ -52,6 +67,7 @@ final class Notifier
             'break_retest' => 'Break & Retest',
             'london_breakout' => 'London Breakout',
             'news_momentum' => 'News Momentum',
+            'manual' => 'Analyst Call',
         ][$k] ?? $k;
     }
 

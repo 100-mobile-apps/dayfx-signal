@@ -62,7 +62,7 @@ class _SignalDetailScreenState extends State<SignalDetailScreen> {
               icon: const Icon(Icons.ios_share_rounded),
               onPressed: () => Share.share(
                 '${s.direction} ${s.pair} (${tierLabel(s.tier)} ${s.score}/100)\n'
-                'Entry ${s.fmt(s.entry)}  SL ${s.fmt(s.sl)}\nTP1 ${s.fmt(s.tp1)}  TP2 ${s.fmt(s.tp2)}\n\n'
+                '${s.locked ? '' : 'Entry ${s.fmt(s.entry)}  SL ${s.fmt(s.sl)}\nTP1 ${s.fmt(s.tp1)}  TP2 ${s.fmt(s.tp2)}\n'}\n'
                 'Free forex day-trading signals: ${AppConfig.playStoreUrl}',
               ),
             ),
@@ -127,6 +127,27 @@ class _SignalDetailScreenState extends State<SignalDetailScreen> {
             ]),
           ),
         ),
+        if (s.locked) ...[
+          const SectionTitle('Trade levels'),
+          // Google Play rule: no link or price for an outside payment inside the app.
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(children: [
+                const Icon(Icons.lock_rounded, color: AppColors.gold, size: 30),
+                const SizedBox(height: 8),
+                const Text('Premium signal', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                const SizedBox(height: 6),
+                Text(
+                  'Entry, stop loss and take profits for this live signal are for Premium members. '
+                  'You can see the full levels in History once the trade closes.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.muted, height: 1.4),
+                ),
+              ]),
+            ),
+          ),
+        ] else ...[
         const SectionTitle('Trade levels · tap to copy'),
         Card(
           child: Column(children: [
@@ -145,6 +166,7 @@ class _SignalDetailScreenState extends State<SignalDetailScreen> {
           'Plan: close half at TP1 and move your stop to entry — the rest runs risk-free to TP2. '
           'Any trade still open at 21:00 UTC is closed (day trading, no overnight holds).',
         ),
+        ],
         const SectionTitle('Why this signal'),
         Card(
           child: Padding(
@@ -162,8 +184,10 @@ class _SignalDetailScreenState extends State<SignalDetailScreen> {
             ]),
           ),
         ),
-        const SectionTitle('Position size'),
-        _RiskCalc(signal: s, balance: _balance, risk: _risk, prices: _prices, onChanged: () => setState(() {})),
+        if (!s.locked) ...[
+          const SectionTitle('Position size'),
+          _RiskCalc(signal: s, balance: _balance, risk: _risk, prices: _prices, onChanged: () => setState(() {})),
+        ],
         const SectionTitle('Timeline'),
         Card(
           child: Padding(

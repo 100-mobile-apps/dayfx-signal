@@ -8,7 +8,7 @@ require __DIR__ . '/lib/bootstrap.php';
 require __DIR__ . '/lib/MarketData.php';
 require __DIR__ . '/lib/Engine.php';
 require __DIR__ . '/lib/Tracker.php';
-require __DIR__ . '/lib/Notifier.php';
+require_once __DIR__ . '/lib/Notifier.php';
 
 if (PHP_SAPI !== 'cli' && !hash_equals((string)cfg('cron_secret'), (string)($_GET['key'] ?? ''))) {
     http_response_code(403);

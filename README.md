@@ -1,19 +1,26 @@
 # DayFX Signals — Forex Day-Trading Signals (Flutter + cPanel)
 
-Free forex day-trading signal app. Price action + news strategies, Elite mode, live-tracked results,
-push (WorkManager) + email alerts, auth, and the Swiftmynd developer promo. Backend runs on any cPanel host (PHP 8.1+, MySQL).
+Forex day-trading signal app. Price action + news strategies, Elite mode, live-tracked results,
+push (WorkManager) + email alerts, auth, and the Swiftmynd developer promo.
+Also includes a **web version** (`/app`), an **admin panel** (`/admin`), an optional **Premium plan paid with Paystack**,
+and an **affiliate programme** (users earn a % of Premium payments from people they refer).
+Backend runs on any cPanel host (PHP 8.1+, MySQL).
 
 ```
 dayfx/
 ├── backend/            → upload to cPanel (e.g. public_html/dayfx)
-│   ├── api/            REST API used by the app
-│   ├── lib/            Engine, indicators, news, tracker, notifications
+│   ├── api/            REST API used by the app and the web app
+│   ├── app/            web version (open https://dayfxsignal.100apkgoals.com/app/)
+│   ├── admin/          admin panel (https://dayfxsignal.100apkgoals.com/admin/)
+│   ├── lib/            Engine, indicators, news, tracker, notifications, accounts (Premium + affiliates)
+│   ├── r.php           short referral links: /r/CODE
 │   ├── cron.php        runs every 15 min: settles trades + finds new setups
 │   ├── backtest.php    test the strategies on ~50 days of real data
-│   ├── admin.php       simple dashboard (engine status, signals, win rate, logs)
 │   ├── privacy.html    privacy policy (required by Google Play)
 │   ├── delete-account.html  public account deletion requests
-│   └── schema.sql
+│   ├── install.php     one-time installer: creates/upgrades tables, checks setup (delete after use)
+│   ├── schema.sql              new install
+│   └── schema_upgrade_web.sql  upgrade an existing install (adds Premium + affiliates)
 └── app/                → Flutter project (lib/, assets/, android/, ios/)
 ```
 
@@ -51,20 +58,25 @@ New signals only 07:00–19:00 UTC (London + New York). Every trade is force-clo
 
 1. **Upload** the current `backend/` folder to `public_html/dayfx/`. If you deploy an archive instead, recreate it from this folder so it includes `delete-account.html` and the latest API; the pre-existing `backend.zip` is not updated automatically.
 2. **Database:** cPanel › MySQL Databases → create DB + user (all privileges). phpMyAdmin → Import `schema.sql`.
+   *Already running the earlier version?* Import `schema_upgrade_web.sql` once instead (keeps your users and signals).
 3. **Config:** copy `config.sample.php` → `config.php` and fill in:
    - DB name/user/password
    - `twelvedata_key` — free at twelvedata.com (free plan = 800 credits/day; the app uses ~450/day)
    - `mail_from` — create this mailbox in cPanel › Email Accounts
-   - `cron_secret` and admin login (`php -r "echo password_hash('yourpass', PASSWORD_DEFAULT);"` — or use any online bcrypt generator)
+   - `cron_secret`
+   - `base_url` — e.g. `https://dayfxsignal.100apkgoals.com` (used in referral links, emails and the Paystack return)
+   - `admin_emails` — your email. Then sign up once (web app or Android app) with that email; that account can open `/admin/`
+   - `paystack_secret_key` — leave empty until you're ready to sell Premium (see section 3)
+   - If you're upgrading: your old `config.php` has `admin_user` / `admin_pass_hash`; they are no longer used. Add the new lines above.
 4. **Push:** nothing to set up on the server. The app gets alerts through WorkManager (it polls your API), so no Firebase account is needed.
    (The `fcm_*` lines in `config.php` are optional and can stay as they are.)
 5. **Cron job:** cPanel › Cron Jobs → add:
    ```
    1,16,31,46 * * * *   /usr/local/bin/php /home/USER/public_html/dayfx/cron.php >/dev/null 2>&1
    ```
-6. **Check:** open `https://yourdomain.com/dayfx/admin.php` — the Engine time should turn green within 15 minutes (on a trading day).
-   Test the API: `https://yourdomain.com/dayfx/api/stats` should return `{"error":"Unauthorized"}` (that means routing works).
-   If you get a 404 instead, your host doesn't do rewrites — use `https://yourdomain.com/dayfx/api/index.php?r=` as `apiBase` in the app.
+6. **Check:** open `https://dayfxsignal.100apkgoals.com/admin/` — the Engine pill should turn green within 15 minutes (on a trading day).
+   Test the API: `https://dayfxsignal.100apkgoals.com/api/stats` should return `{"error":"Unauthorized"}` (that means routing works).
+   If you get a 404 instead, your host doesn't do rewrites — use `https://dayfxsignal.100apkgoals.com/api/index.php?r=` as `apiBase` in the app.
 
 ### Backtest before launch (recommended)
 cPanel › Terminal (or SSH):
@@ -88,7 +100,7 @@ flutter test
 flutter run
 ```
 
-`lib/config.dart` uses `https://dayfxsignal.bulksend.top/api` as the API base. Its `privacyPolicyUrl` and `deletionUrl` still contain example domains: set them to verified live HTTPS pages before publishing. If API rewrites are unavailable, use the `index.php?r=` URL documented above. Increment the build number in `pubspec.yaml` for each Play submission.
+`lib/config.dart` uses `https://dayfxsignal.100apkgoals.com/api` as the API base and `siteBase` (`https://dayfxsignal.100apkgoals.com`) for referral links. Its `privacyPolicyUrl` and `deletionUrl` still contain example domains: set them to verified live HTTPS pages before publishing. If API rewrites are unavailable, use the `index.php?r=` URL documented above. Increment the build number in `pubspec.yaml` for each Play submission.
 
 ### Android release signing and builds
 
@@ -137,7 +149,57 @@ On macOS with Xcode and CocoaPods installed, run `flutter pub get`, then open `i
 
 ---
 
-## 3. Google Play listing (compliant copy)
+## 3. Web app, admin panel, Premium and affiliates
+
+### Web version (`/app/`)
+Same accounts as the Android app. Signals (live + history, Elite filter, session strip, weekly banner), signal detail with
+tap-to-copy levels and lot-size calculator, news calendar with countdown, track record, tools, Premium, **Earn** (affiliate
+dashboard) and Account (alerts, password, delete account). Works on phones and desktops. While a tab is open it checks
+for signals every minute and can show browser notifications.
+Edit the small `window.DAYFX` block at the top of `app/index.html` if your API path is different (e.g. no rewrites → `'../api/index.php?r='`)
+or to change the Play Store / WhatsApp links.
+
+### Admin panel (`/admin/`)
+Sign in with a DayFX account whose email is in `admin_emails`.
+- **Dashboard:** users, active users, Premium members, revenue, 7-day win rate, sign-ups chart, engine heartbeat
+- **Users:** search/filter, give or remove Premium days, ban/unban, make admin, set or change a referrer, delete
+- **Signals:** post a manual "Analyst Call" signal (tracked and settled by the cron like engine signals, optional email blast), close or delete signals
+- **Payments:** revenue totals, record a manual bank-transfer payment (adds Premium + pays the referrer), mark refunded (voids commission), re-check a pending payment with Paystack
+- **Affiliates:** leaderboard (clicks, sign-ups, conversion, Premium now, earned, paid) and every commission (void/restore)
+- **Payouts:** requests with bank details; mark paid with your transfer reference, or reject. The affiliate gets an email
+- **Email users:** send a message to all / free / Premium / affiliates (test to yourself first)
+- **Settings:** Premium on/off, currency, monthly/yearly price, which live signals are locked, optional delay before free users see levels,
+  commission %, holding days, minimum payout, recurring commission on/off, announcement banner
+- **Engine log**
+
+### Premium (Paystack)
+Premium is **off** by default, so nothing changes for users until you switch it on.
+1. Paystack dashboard › Settings › API Keys & Webhooks: copy the **secret key** into `config.php` (`paystack_secret_key`).
+   Set the **Webhook URL** to `https://dayfxsignal.100apkgoals.com/api/paystack/webhook`. (Test with `sk_test_...` first.)
+2. `/admin/` › Settings: set prices (defaults ₦2,500/month, ₦20,000/year), choose what's locked, tick **Premium is on**, save.
+3. What free users see when Premium is on: live signals show pair, direction, score and reasons, with the levels hidden.
+   Levels appear in History when the trade closes (or after the delay you set). Results, news and tools stay free.
+   Emails: Premium members get full levels; free users get a teaser.
+4. Payments are one-off (no auto-renewal). Paying again adds days on top. Every payment is confirmed server-side
+   with Paystack (webhook + return page), and processed only once.
+
+**Google Play rule:** the Android app must not show prices or link to an outside payment page for digital content.
+So in the app a locked signal just says "Premium signal" with no button or link. People upgrade on the website with
+the same account and Premium then works in the app too. Don't add a "buy" link inside the app. If you ever want in-app
+purchase, that has to go through Google Play Billing.
+
+### Affiliates
+- Every user gets a referral code and link: `https://dayfxsignal.100apkgoals.com/r/CODE` (web app › Earn; Android app › Settings › Invite traders).
+- Anyone who signs up through the link (or types the code at sign-up in the app or on the web) is linked to that affiliate for good.
+- When they pay for Premium, the affiliate earns the commission % (default 30%, also on renewals). It's **pending** for the holding
+  period (default 7 days, your refund window), then **available**.
+- Affiliates add bank details and request a payout (minimum default ₦5,000). You pay from your bank app, then mark it paid in `/admin/` › Payouts.
+- Refunds void the commission. If it had already been paid out, the affiliate's balance goes negative and future earnings cover it first.
+- Self-referral by the same email is blocked; link visits are counted once per visitor per day.
+
+---
+
+## 4. Google Play listing (compliant copy)
 
 **Title:** DayFX: Forex Day Trading Signals
 **Short description:** Free forex day trading signals with price action, news alerts & tracked results.
@@ -152,10 +214,12 @@ Free forex day trading signals for EUR/USD, GBP/USD, USD/JPY, gold and more — 
 • Push and email alerts
 Signals are for education only, not financial advice. Trading involves a high risk of loss.
 
+**If you switch Premium on:** drop "Free" from the short and full description (live levels are no longer free), e.g. "Forex day trading signals with price action, news alerts & tracked results." and mention "Optional Premium on the website".
+
 **Avoid** in the listing, screenshots and app text: "guaranteed", "95–99% accuracy", "risk-free profits", "get rich".
 Policy references: Google Play *Financial Services* and *Misleading Claims* policies.
 
-**Data safety form:** disclose name and email for account management, plus any data your deployed host actually logs or retains. The current mobile app does not send Firebase device tokens or collect a device ID. It uses HTTPS for API traffic; do not publish the example URL as-is. Review the deployed backend, backups, logs and third-party integrations before finalizing the form.
+**Data safety form:** disclose name and email for account management, app interactions (last active time), plus any data your deployed host actually logs or retains. The current mobile app does not send Firebase device tokens or collect a device ID. It uses HTTPS for API traffic; do not publish the example URL as-is. Premium purchase history lives on the website only; no payments happen in the app. Review the deployed backend, backups, logs and third-party integrations before finalizing the form.
 
 ### Account deletion URL for Play Console
 

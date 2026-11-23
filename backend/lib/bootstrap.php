@@ -92,3 +92,5 @@ function http_get_json(string $url, int $timeout = 20): ?array
     $data = json_decode($body, true);
     return is_array($data) ? $data : null;
 }
+
+require_once __DIR__ . '/accounts.php';

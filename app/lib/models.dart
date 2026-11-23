@@ -7,6 +7,8 @@ class AppUser {
   final bool emailAlerts;
   final bool pushAlerts;
   final bool eliteOnly;
+  final bool isPremium;
+  final String? refCode;
 
   AppUser({
     required this.id,
@@ -15,6 +17,8 @@ class AppUser {
     required this.emailAlerts,
     required this.pushAlerts,
     required this.eliteOnly,
+    this.isPremium = false,
+    this.refCode,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
@@ -24,6 +28,8 @@ class AppUser {
         emailAlerts: j['email_alerts'] == true,
         pushAlerts: j['push_alerts'] == true,
         eliteOnly: j['elite_only'] == true,
+        isPremium: j['is_premium'] == true,
+        refCode: j['ref_code'] as String?,
       );
 }
 
@@ -43,6 +49,8 @@ class Signal {
   final DateTime createdAt;
   final DateTime closesAt;
   final DateTime? closedAt;
+  /// Premium is on and this live signal's levels are hidden for this user (levels are 0).
+  final bool locked;
 
   Signal({
     required this.id,
@@ -63,6 +71,7 @@ class Signal {
     required this.createdAt,
     required this.closesAt,
     required this.closedAt,
+    this.locked = false,
   });
 
   bool get isBuy => direction == 'BUY';
@@ -93,6 +102,7 @@ class Signal {
         createdAt: DateTime.parse(j['created_at'] as String).toLocal(),
         closesAt: DateTime.parse(j['closes_at'] as String).toLocal(),
         closedAt: j['closed_at'] == null ? null : DateTime.parse(j['closed_at'] as String).toLocal(),
+        locked: j['locked'] == true,
       );
 }
 

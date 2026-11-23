@@ -71,8 +71,14 @@ class AppState extends ChangeNotifier {
   Future<void> login(String email, String password) async =>
       _handleAuth(await Api.instance.post('/auth/login', {'email': email, 'password': password}));
 
-  Future<void> register(String name, String email, String password) async =>
-      _handleAuth(await Api.instance.post('/auth/register', {'name': name, 'email': email, 'password': password}));
+  Future<void> register(String name, String email, String password, {String ref = ''}) async =>
+      _handleAuth(await Api.instance.post('/auth/register', {
+        'name': name,
+        'email': email,
+        'password': password,
+        if (ref.isNotEmpty) 'ref': ref.toUpperCase(),
+        'source': 'app',
+      }));
 
   Future<void> requestReset(String email) => Api.instance.post('/auth/forgot', {'email': email});
 

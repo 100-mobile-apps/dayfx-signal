@@ -9,8 +9,12 @@ class AppConfig {
   static const playStoreId = 'com.swiftmynd.dayfx_signals';
   /// Numeric App Store ID assigned by App Store Connect after app creation.
   static const appStoreId = String.fromEnvironment('APP_STORE_ID');
-  static const privacyPolicyUrl = 'https://yourdomain.com/dayfx/privacy.html';
-  static const deletionUrl = 'https://yourdomain.com/dayfx/delete-account.html';
+  static const privacyPolicyUrl = 'https://dayfxsignal.100apkgoals.com/privacy.html';
+  static const deletionUrl = 'https://dayfxsignal.100apkgoals.com/delete-account.html';
+
+  /// Public folder of the backend (no trailing slash). Referral links are $siteBase/r/CODE
+  static const siteBase = 'https://dayfxsignal.100apkgoals.com';
+  static String referralLink(String code) => '$siteBase/r/$code';
 
   // Developer promo (Swiftmynd Technologies Ltd)
   static const developerName = 'Swiftmynd Technologies Ltd';
