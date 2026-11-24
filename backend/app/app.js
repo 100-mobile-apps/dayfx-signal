@@ -173,7 +173,7 @@ function authLayout(inner) {
         <li>${ic('tick')}Entry, stop loss and two take profits on every signal</li>
         <li>${ic('tick')}Elite mode: only the highest-confluence setups</li>
         <li>${ic('tick')}News calendar, lot size calculator and session clock</li>
-        <li>${ic('tick')}Refer traders and earn commission</li>
+        <li>${ic('tick')}${S.cfg && S.cfg.premium_enabled ? 'Refer traders and earn commission' : 'Every signal free, with a public track record'}</li>
       </ul>
     </div>
     <small class="dim">Trading forex carries a high risk of loss. Signals are educational, not financial advice.</small>
@@ -507,12 +507,12 @@ routes.earn = async () => {
   if (!a.enabled) { page().innerHTML = `<div class="head"><div><h1>Earn with DayFX</h1></div></div><div class="note">The affiliate programme is paused right now. Check back soon.</div>`; return; }
   const B = a.balance_labels, d = a.payout_details || {};
   const msg = encodeURIComponent(`I use DayFX for forex day trading signals with a live track record. Join with my link: ${a.link}`);
-  page().innerHTML = `<div class="head"><div><h1>Earn with DayFX</h1><p class="sub">Invite traders and earn ${a.commission_pct}% of ${a.recurring ? 'every Premium payment they make' : 'their first Premium payment'}</p></div></div>
+  page().innerHTML = `<div class="head"><div><h1>Earn with DayFX</h1><p class="sub">${!a.premium_enabled ? 'Invite traders to free DayFX signals' : `Invite traders and earn ${a.commission_pct}% of ${a.recurring ? 'every Premium payment they make' : 'their first Premium payment'}`}</p></div></div>
   <div class="hero-card"><small class="mute" style="font-weight:700;letter-spacing:.08em">YOUR REFERRAL LINK</small>
   <div class="linkbox"><input class="input" id="lnk" readonly value="${esc(a.link)}"><button class="btn" id="cp">${ic('copy')}Copy</button></div>
   <div class="row mute" style="margin-top:8px;font-size:14px">Referral code: <b style="color:var(--text);letter-spacing:.06em">${esc(a.code)}</b> · people can also type it when they sign up in the app</div>
   <div class="share"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/?text=${msg}">${ic('chat')}WhatsApp</a><a class="btn ghost sm" target="_blank" rel="noopener" href="https://t.me/share/url?url=${encodeURIComponent(a.link)}&text=${encodeURIComponent('Forex day trading signals with a live track record')}">Telegram</a><a class="btn ghost sm" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${msg}">X / Twitter</a><a class="btn ghost sm" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(a.link)}">Facebook</a></div></div>
-  ${a.premium_enabled ? '' : '<div class="note" style="margin-top:12px">Premium hasn\'t launched yet, so there are no commissions to earn today. Everyone who joins with your link is still linked to you, and you\'ll earn when they upgrade.</div>'}
+  ${a.premium_enabled ? '' : '<div class="note" style="margin-top:12px">Everything in DayFX is free, so there are no commissions to earn. Share your link to bring traders in; everyone who joins with it stays linked to your account.</div>'}
   <div class="sec">Your referrals</div>
   <div class="grid g4"><div class="card kpi"><div class="l">Link visits</div><div class="v num">${a.stats.clicks}</div><div class="s">unique per day</div></div>
   <div class="card kpi"><div class="l">Sign-ups</div><div class="v num">${a.stats.signups}</div><div class="s">joined with your link</div></div>
