@@ -66,12 +66,15 @@ function kv_set(string $k, $v): void
 /** Pip size for a symbol like EUR/USD, USD/JPY, XAU/USD */
 function pip_size(string $pair): float
 {
+    if (str_starts_with($pair, 'BTC')) return 1.0;   // same pip sizes as Forex Signals Live
+    if (str_starts_with($pair, 'ETH')) return 0.1;
     if (str_starts_with($pair, 'XAU')) return 0.1;
     return str_contains($pair, 'JPY') ? 0.01 : 0.0001;
 }
 
 function price_decimals(string $pair): int
 {
+    if (str_starts_with($pair, 'BTC') || str_starts_with($pair, 'ETH')) return 2;
     if (str_starts_with($pair, 'XAU')) return 2;
     return str_contains($pair, 'JPY') ? 3 : 5;
 }

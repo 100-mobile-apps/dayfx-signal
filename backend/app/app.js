@@ -57,8 +57,8 @@ async function api(path, opts = {}) {
   if (!res.ok) throw new Error(j.error || 'Something went wrong (' + res.status + ')');
   return j;
 }
-const pipSize = (p) => p.startsWith('XAU') ? 0.1 : p.includes('JPY') ? 0.01 : 0.0001;
-const decs = (p) => p.startsWith('XAU') ? 2 : p.includes('JPY') ? 3 : 5;
+const pipSize = (p) => p.startsWith('BTC') ? 1 : p.startsWith('ETH') || p.startsWith('XAU') ? 0.1 : p.includes('JPY') ? 0.01 : 0.0001;
+const decs = (p) => /^(XAU|BTC|ETH)/.test(p) ? 2 : p.includes('JPY') ? 3 : 5;
 const fmtP = (p, v) => v == null ? '—' : Number(v).toFixed(decs(p));
 const fmtPips = (v) => (v > 0 ? '+' : '') + Number(v).toFixed(1);
 const ago = (iso) => {
@@ -356,14 +356,14 @@ let PRICES = null;
 async function prices() { if (!PRICES) { try { PRICES = (await api('/prices')).prices || {}; } catch (e) { PRICES = {}; } } return PRICES; }
 function pipValue(pair, P) {
   const quote = pair.split('/')[1];
-  const inQuote = pipSize(pair) * (pair.startsWith('XAU') ? 100 : 100000);
+  const inQuote = pipSize(pair) * (/^(BTC|ETH)/.test(pair) ? 1 : pair.startsWith('XAU') ? 100 : 100000); // Exness: 1 coin per lot for BTC/ETH
   if (quote === 'USD') return inQuote;
   if (P['USD/' + quote]) return inQuote / P['USD/' + quote].price;
   if (P[quote + '/USD']) return inQuote * P[quote + '/USD'].price;
   const approx = { JPY: 150, CAD: 1.37, CHF: 0.88, GBP: 0.78, AUD: 1.52, NZD: 1.68, EUR: 0.92 };
   return inQuote / (approx[quote] || 1);
 }
-const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'EUR/JPY', 'XAU/USD', 'NZD/USD', 'USD/CHF', 'GBP/JPY'];
+const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'EUR/JPY', 'XAU/USD', 'BTC/USD', 'ETH/USD', 'NZD/USD', 'USD/CHF', 'GBP/JPY'];
 async function lotCalc(el, fixedPair, fixedStop) {
   const P = await prices();
   const v = LS.get('calc', { bal: 1000, risk: 1, pair: 'EUR/USD', stop: 20 });
