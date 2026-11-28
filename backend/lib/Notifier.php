@@ -67,6 +67,8 @@ final class Notifier
             'break_retest' => 'Break & Retest',
             'london_breakout' => 'London Breakout',
             'news_momentum' => 'News Momentum',
+            'swing_ifvg' => '4H Swing · IFVG',
+            'swing_rsi_dip' => '4H Swing · RSI Dip',
             'manual' => 'Analyst Call',
         ][$k] ?? $k;
     }

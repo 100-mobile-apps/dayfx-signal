@@ -33,7 +33,8 @@ $eod = (int)cfg('eod_close_utc');
 
 $pairsCfg = cfg('pairs');
 // Also settle open trades on markets that were removed from the list (tracking only, no new signals).
-$orphans = db()->query("SELECT DISTINCT pair FROM signals WHERE status IN ('ACTIVE','TP1')")->fetchAll(PDO::FETCH_COLUMN);
+// BTC/ETH swing trades are tracked by cron_crypto.php (Binance data, 24/7), never here.
+$orphans = db()->query("SELECT DISTINCT pair FROM signals WHERE status IN ('ACTIVE','TP1') AND pair NOT IN ('BTC/USD','ETH/USD')")->fetchAll(PDO::FETCH_COLUMN);
 foreach (array_values(array_unique(array_merge($pairsCfg, $orphans))) as $idx => $pair) {
     $trackOnly = !in_array($pair, $pairsCfg, true);
     if ($idx > 0) sleep(8); // Twelve Data free tier: 8 requests/minute
