@@ -67,6 +67,8 @@ final class Notifier
             'break_retest' => 'Break & Retest',
             'london_breakout' => 'London Breakout',
             'news_momentum' => 'News Momentum',
+            'swing_ifvg' => '4H Swing · IFVG',
+            'swing_rsi_dip' => '4H Swing · RSI Dip',
             'manual' => 'Analyst Call',
         ][$k] ?? $k;
     }
@@ -173,7 +175,7 @@ final class Notifier
     <div style="color:#22C55E;font-size:12px;letter-spacing:1px">DAYFX SIGNALS</div>
     <h2 style="color:#E8ECF4;margin:8px 0 16px">$t</h2>
     <table style="width:100%;border-collapse:collapse">$tr</table>
-    <p style="color:#5B6578;font-size:11px;margin-top:18px">Trading forex carries a high risk of loss. Signals are educational, not financial advice. Past results do not guarantee future results.</p>
+    <p style="margin:18px 0 0;padding:12px 14px;border-radius:10px;background:#FEF3C7;color:#78350F;font-size:13px;line-height:1.5;text-align:left">&#128233; <b>Never miss a signal:</b> if this email landed in Spam, Junk or Promotions, open it and tap <b>&ldquo;Not spam&rdquo;</b> (or move it to your Inbox), then add this sender to your contacts. Please check your spam folder regularly so signal emails keep reaching you.</p><p style="color:#5B6578;font-size:11px;margin-top:18px">Trading forex carries a high risk of loss. Signals are educational, not financial advice. Past results do not guarantee future results.</p>
   </div>
 </div>
 HTML;

@@ -57,8 +57,8 @@ async function api(path, opts = {}) {
   if (!res.ok) throw new Error(j.error || 'Something went wrong (' + res.status + ')');
   return j;
 }
-const pipSize = (p) => p.startsWith('XAU') ? 0.1 : p.includes('JPY') ? 0.01 : 0.0001;
-const decs = (p) => p.startsWith('XAU') ? 2 : p.includes('JPY') ? 3 : 5;
+const pipSize = (p) => p.startsWith('BTC') ? 1 : p.startsWith('ETH') || p.startsWith('XAU') ? 0.1 : p.includes('JPY') ? 0.01 : 0.0001;
+const decs = (p) => /^(XAU|BTC|ETH)/.test(p) ? 2 : p.includes('JPY') ? 3 : 5;
 const fmtP = (p, v) => v == null ? '—' : Number(v).toFixed(decs(p));
 const fmtPips = (v) => (v > 0 ? '+' : '') + Number(v).toFixed(1);
 const ago = (iso) => {
@@ -173,7 +173,7 @@ function authLayout(inner) {
         <li>${ic('tick')}Entry, stop loss and two take profits on every signal</li>
         <li>${ic('tick')}Elite mode: only the highest-confluence setups</li>
         <li>${ic('tick')}News calendar, lot size calculator and session clock</li>
-        <li>${ic('tick')}Refer traders and earn commission</li>
+        <li>${ic('tick')}${S.cfg && S.cfg.premium_enabled ? 'Refer traders and earn commission' : 'Every signal free, with a public track record'}</li>
       </ul>
     </div>
     <small class="dim">Trading forex carries a high risk of loss. Signals are educational, not financial advice.</small>
@@ -356,14 +356,14 @@ let PRICES = null;
 async function prices() { if (!PRICES) { try { PRICES = (await api('/prices')).prices || {}; } catch (e) { PRICES = {}; } } return PRICES; }
 function pipValue(pair, P) {
   const quote = pair.split('/')[1];
-  const inQuote = pipSize(pair) * (pair.startsWith('XAU') ? 100 : 100000);
+  const inQuote = pipSize(pair) * (/^(BTC|ETH)/.test(pair) ? 1 : pair.startsWith('XAU') ? 100 : 100000); // Exness: 1 coin per lot for BTC/ETH
   if (quote === 'USD') return inQuote;
   if (P['USD/' + quote]) return inQuote / P['USD/' + quote].price;
   if (P[quote + '/USD']) return inQuote * P[quote + '/USD'].price;
   const approx = { JPY: 150, CAD: 1.37, CHF: 0.88, GBP: 0.78, AUD: 1.52, NZD: 1.68, EUR: 0.92 };
   return inQuote / (approx[quote] || 1);
 }
-const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'EUR/JPY', 'XAU/USD', 'NZD/USD', 'USD/CHF', 'GBP/JPY'];
+const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'EUR/JPY', 'XAU/USD', 'BTC/USD', 'ETH/USD', 'NZD/USD', 'USD/CHF', 'GBP/JPY'];
 async function lotCalc(el, fixedPair, fixedStop) {
   const P = await prices();
   const v = LS.get('calc', { bal: 1000, risk: 1, pair: 'EUR/USD', stop: 20 });
@@ -507,12 +507,12 @@ routes.earn = async () => {
   if (!a.enabled) { page().innerHTML = `<div class="head"><div><h1>Earn with DayFX</h1></div></div><div class="note">The affiliate programme is paused right now. Check back soon.</div>`; return; }
   const B = a.balance_labels, d = a.payout_details || {};
   const msg = encodeURIComponent(`I use DayFX for forex day trading signals with a live track record. Join with my link: ${a.link}`);
-  page().innerHTML = `<div class="head"><div><h1>Earn with DayFX</h1><p class="sub">Invite traders and earn ${a.commission_pct}% of ${a.recurring ? 'every Premium payment they make' : 'their first Premium payment'}</p></div></div>
+  page().innerHTML = `<div class="head"><div><h1>Earn with DayFX</h1><p class="sub">${!a.premium_enabled ? 'Invite traders to free DayFX signals' : `Invite traders and earn ${a.commission_pct}% of ${a.recurring ? 'every Premium payment they make' : 'their first Premium payment'}`}</p></div></div>
   <div class="hero-card"><small class="mute" style="font-weight:700;letter-spacing:.08em">YOUR REFERRAL LINK</small>
   <div class="linkbox"><input class="input" id="lnk" readonly value="${esc(a.link)}"><button class="btn" id="cp">${ic('copy')}Copy</button></div>
   <div class="row mute" style="margin-top:8px;font-size:14px">Referral code: <b style="color:var(--text);letter-spacing:.06em">${esc(a.code)}</b> · people can also type it when they sign up in the app</div>
   <div class="share"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/?text=${msg}">${ic('chat')}WhatsApp</a><a class="btn ghost sm" target="_blank" rel="noopener" href="https://t.me/share/url?url=${encodeURIComponent(a.link)}&text=${encodeURIComponent('Forex day trading signals with a live track record')}">Telegram</a><a class="btn ghost sm" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${msg}">X / Twitter</a><a class="btn ghost sm" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(a.link)}">Facebook</a></div></div>
-  ${a.premium_enabled ? '' : '<div class="note" style="margin-top:12px">Premium hasn\'t launched yet, so there are no commissions to earn today. Everyone who joins with your link is still linked to you, and you\'ll earn when they upgrade.</div>'}
+  ${a.premium_enabled ? '' : '<div class="note" style="margin-top:12px">Everything in DayFX is free, so there are no commissions to earn. Share your link to bring traders in; everyone who joins with it stays linked to your account.</div>'}
   <div class="sec">Your referrals</div>
   <div class="grid g4"><div class="card kpi"><div class="l">Link visits</div><div class="v num">${a.stats.clicks}</div><div class="s">unique per day</div></div>
   <div class="card kpi"><div class="l">Sign-ups</div><div class="v num">${a.stats.signups}</div><div class="s">joined with your link</div></div>

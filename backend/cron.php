@@ -31,14 +31,19 @@ News::refresh();
 $prices = kv_get('last_prices', []);
 $eod = (int)cfg('eod_close_utc');
 
-foreach (cfg('pairs') as $idx => $pair) {
+$pairsCfg = cfg('pairs');
+// Also settle open trades on markets that were removed from the list (tracking only, no new signals).
+// BTC/ETH swing trades are tracked by cron_crypto.php (Binance data, 24/7), never here.
+$orphans = db()->query("SELECT DISTINCT pair FROM signals WHERE status IN ('ACTIVE','TP1') AND pair NOT IN ('BTC/USD','ETH/USD')")->fetchAll(PDO::FETCH_COLUMN);
+foreach (array_values(array_unique(array_merge($pairsCfg, $orphans))) as $idx => $pair) {
+    $trackOnly = !in_array($pair, $pairsCfg, true);
     if ($idx > 0) sleep(8); // Twelve Data free tier: 8 requests/minute
     $m15 = MarketData::m15($pair);
     if (!$m15 || count($m15) < 100) continue;
 
     $last = end($m15);
     $prev = $m15[count($m15) - 97] ?? $m15[0]; // ~24h ago
-    $prices[$pair] = [
+    if (!$trackOnly) $prices[$pair] = [
         'price' => $last['c'],
         'change_pct' => round(($last['c'] - $prev['c']) / $prev['c'] * 100, 2),
         'time' => gmdate('c', $last['t'] + 900),
@@ -48,6 +53,8 @@ foreach (cfg('pairs') as $idx => $pair) {
     foreach (Tracker::update($pair, $m15) as $changed) {
         Notifier::statusChange($changed);
     }
+
+    if ($trackOnly) continue;
 
     // 2) look for a new setup — one open trade per pair, 60-min cooldown, max 3 per pair per day
     $open = db()->prepare("SELECT COUNT(*) FROM signals WHERE pair = ? AND status IN ('ACTIVE','TP1')");

@@ -12,7 +12,7 @@ return [
     'twelvedata_key' => 'CHANGE_ME',
 
     // Day-trading pairs (Twelve Data symbol format)
-    'pairs' => ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'EUR/JPY', 'XAU/USD'],
+    'pairs' => ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'EUR/JPY', 'GBP/JPY', 'XAU/USD'],  // BTC/ETH tried 24 Nov and removed: the forex-tuned M15 stops are too tight for crypto
 
     // Signals below this score are never published. Elite = 85+, High = 75+, Standard = MIN_SCORE+
     'min_score' => 70,

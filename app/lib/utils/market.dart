@@ -43,8 +43,8 @@ bool marketOpen(DateTime utc) {
 /// Signals are only generated 07:00–19:00 UTC on trading days.
 bool signalWindowOpen(DateTime utc) => marketOpen(utc) && utc.hour >= 7 && utc.hour < 19;
 
-double pipSizeOf(String pair) => pair.startsWith('XAU') ? 0.1 : (pair.contains('JPY') ? 0.01 : 0.0001);
-double contractSizeOf(String pair) => pair.startsWith('XAU') ? 100 : 100000;
+double pipSizeOf(String pair) => pair.startsWith('BTC') ? 1 : (pair.startsWith('ETH') || pair.startsWith('XAU')) ? 0.1 : (pair.contains('JPY') ? 0.01 : 0.0001);
+double contractSizeOf(String pair) => (pair.startsWith('BTC') || pair.startsWith('ETH')) ? 1 : pair.startsWith('XAU') ? 100 : 100000; // Exness: 1 coin per lot
 
 /// Approximate USD value of 1 pip for 1 standard lot, using latest prices when available.
 double pipValueUsdPerLot(String pair, List<PriceTick> prices) {
@@ -69,5 +69,5 @@ double pipValueUsdPerLot(String pair, List<PriceTick> prices) {
 }
 
 const calculatorPairs = [
-  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'EUR/JPY', 'XAU/USD', 'NZD/USD', 'USD/CHF', 'GBP/JPY',
+  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'EUR/JPY', 'XAU/USD', 'BTC/USD', 'ETH/USD', 'NZD/USD', 'USD/CHF', 'GBP/JPY',
 ];
